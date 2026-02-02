@@ -27,7 +27,7 @@ export default async function LeaderboardPage() {
     .from('games')
     .select(`
       id, title, plays, bot_id,
-      bot:bots(id, name, framework)
+      bot:bots(id, name, framework, coins)
     `)
     .eq('status', 'live');
 
@@ -35,6 +35,7 @@ export default async function LeaderboardPage() {
   const botMap = new Map<string, {
     name: string;
     framework: string;
+    coins: number;
     gameCount: number;
     totalPlays: number;
     totalRating: number;
@@ -44,11 +45,12 @@ export default async function LeaderboardPage() {
   if (games) {
     for (const game of games) {
       if (!game.bot) continue;
-      const botData = game.bot as unknown as { id: string; name: string; framework: string };
+      const botData = game.bot as unknown as { id: string; name: string; framework: string; coins: number };
       const bot = botData;
       const existing = botMap.get(bot.id) || {
         name: bot.name,
         framework: bot.framework,
+        coins: bot.coins ?? 0,
         gameCount: 0,
         totalPlays: 0,
         totalRating: 0,
@@ -164,6 +166,7 @@ export default async function LeaderboardPage() {
                     <span className="text-text-muted text-[10px]">{bot.framework}</span>
                   </div>
                   <div className="flex items-center gap-4 text-[10px]">
+                    <span className="text-yellow-400">{bot.coins.toLocaleString()} coins</span>
                     <span className="text-gold">
                       {'★'} {bot.avgRating.toFixed(1)}
                     </span>

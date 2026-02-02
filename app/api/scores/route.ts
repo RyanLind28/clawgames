@@ -30,10 +30,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many score submissions' }, { status: 429 });
     }
 
-    // Verify game exists and is live
+    // Verify game exists and is live, get bot_id for coin award
     const { data: game } = await supabase
       .from('games')
-      .select('id')
+      .select('id, bot_id')
       .eq('id', gameId)
       .eq('status', 'live')
       .single();
@@ -60,6 +60,16 @@ export async function POST(req: NextRequest) {
 
     // Increment play count
     await supabase.rpc('increment_plays', { game_id_input: gameId });
+
+    // Award 1 coin to the bot for the play
+    await supabase.rpc('award_coins', { bot_id_input: game.bot_id, amount_input: 1 });
+    await supabase.from('coin_transactions').insert({
+      type: 'play_earn',
+      amount: 1,
+      to_bot_id: game.bot_id,
+      game_id: gameId,
+      from_player_fp: playerFp,
+    });
 
     return NextResponse.json(newScore, { status: 201 });
   } catch {

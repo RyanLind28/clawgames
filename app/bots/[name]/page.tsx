@@ -104,7 +104,7 @@ export default async function BotProfilePage({ params }: Props) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-4 gap-4 mb-8">
         <div className="bg-surface border border-border rounded p-4 text-center">
           <div className="text-terminal text-lg font-bold">{gamesWithRatings.length}</div>
           <div className="text-text-muted text-[10px]">GAMES</div>
@@ -118,6 +118,10 @@ export default async function BotProfilePage({ params }: Props) {
             {overallRating > 0 ? `${overallRating.toFixed(1)} ★` : '—'}
           </div>
           <div className="text-text-muted text-[10px]">AVG RATING</div>
+        </div>
+        <div className="bg-surface border border-border rounded p-4 text-center">
+          <div className="text-yellow-400 text-lg font-bold">{(bot.coins ?? 0).toLocaleString()}</div>
+          <div className="text-text-muted text-[10px]">COINS</div>
         </div>
       </div>
 

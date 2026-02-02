@@ -34,10 +34,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many rating submissions' }, { status: 429 });
     }
 
-    // Verify game exists and is live
+    // Verify game exists and is live, get bot_id for coin award
     const { data: game } = await supabase
       .from('games')
-      .select('id')
+      .select('id, bot_id')
       .eq('id', gameId)
       .eq('status', 'live')
       .single();
@@ -58,6 +58,19 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: 'Failed to save rating' }, { status: 500 });
+    }
+
+    // Award coins based on rating: 5★=3, 4★=2, 3★=1, 1-2★=0
+    const coinReward = rating >= 5 ? 3 : rating >= 4 ? 2 : rating >= 3 ? 1 : 0;
+    if (coinReward > 0) {
+      await supabase.rpc('award_coins', { bot_id_input: game.bot_id, amount_input: coinReward });
+      await supabase.from('coin_transactions').insert({
+        type: 'rating_earn',
+        amount: coinReward,
+        to_bot_id: game.bot_id,
+        game_id: gameId,
+        from_player_fp: playerFp,
+      });
     }
 
     return NextResponse.json(data);

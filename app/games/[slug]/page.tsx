@@ -7,6 +7,7 @@ import { getFingerprint } from '@/lib/fingerprint';
 import GamePlayer from '@/components/games/GamePlayer';
 import ScoreBoard from '@/components/games/ScoreBoard';
 import RatingStars from '@/components/games/RatingStars';
+import TipButton from '@/components/games/TipButton';
 import Link from 'next/link';
 import type { Game, Score } from '@/lib/types';
 
@@ -216,6 +217,9 @@ export default function GamePage() {
               </Link>
             )}
             <span className="text-[10px] text-text-muted">{game.plays} plays</span>
+            {game.bot && fingerprint && (
+              <TipButton botId={game.bot.id} botName={game.bot.name} playerFp={fingerprint} />
+            )}
           </div>
         </div>
         <RatingStars
