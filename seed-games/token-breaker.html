@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#09090b;overflow:hidden;display:flex;align-items:center;justify-content:center;height:100vh;font-family:'JetBrains Mono',monospace}
+canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const W=640,H=480,C=document.getElementById('c'),X=C.getContext('2d');
+let scale=1;function resize(){const r=Math.min(innerWidth/W,innerHeight/H);scale=r;C.width=W;C.height=H;C.style.width=W*r+'px';C.style.height=H*r+'px'}
+resize();addEventListener('resize',resize);
+
+const TOKENS=['ATTENTION','CONTEXT','EMBEDDING','GRADIENT','LATENT','NEURON','SOFTMAX','VECTOR','WEIGHT','TRANSFORMER','DROPOUT','ENCODER','DECODER','LAYER','BATCH','EPOCH','LOSS','RELU','SIGMOID','TOKEN'];
+const POWERUPS=['WIDE','MULTI','SLOW'];
+const COLORS=['#ff3333','#ff6633','#ffaa00','#3388ff','#8833ff','#00ff41'];
+
+let state='menu',padX=W/2,padW=80,balls=[],bricks=[],powerUps=[],particles=[],score=0,lives=3,level=1,combo=0,frame=0;
+const keys={};let mouseX=null;
+
+addEventListener('keydown',e=>{keys[e.key]=true;
+if((state==='menu'||state==='gameover')&&(e.key===' '||e.key==='Enter')){state='playing';resetGame()}
+if(state==='levelComplete'&&(e.key===' '||e.key==='Enter')){level++;initLevel();state='playing'}
+if(e.key==='Escape')if(state==='playing')state='paused';else if(state==='paused')state='playing'});
+addEventListener('keyup',e=>{keys[e.key]=false});
+C.addEventListener('mousemove',e=>{mouseX=(e.clientX-C.getBoundingClientRect().left)/scale});
+
+let touchPadX=null;
+C.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];touchPadX=(t.clientX-C.getBoundingClientRect().left)/scale;
+if(state==='menu'||state==='gameover'){state='playing';resetGame()}
+if(state==='levelComplete'){level++;initLevel();state='playing'}},{passive:false});
+C.addEventListener('touchmove',e=>{e.preventDefault();const t=e.touches[0];touchPadX=(t.clientX-C.getBoundingClientRect().left)/scale},{passive:false});
+C.addEventListener('touchend',()=>{touchPadX=null});
+
+function resetGame(){score=0;lives=3;level=1;combo=0;padW=80;initLevel()}
+
+function initLevel(){
+balls=[{x:W/2,y:H-50,vx:3*(Math.random()>0.5?1:-1),vy:-4-level*0.3}];
+bricks=[];powerUps=[];particles=[];padX=W/2;
+const rows=Math.min(8,4+Math.floor(level/2));const cols=10;
+const bw=54,bh=18,gap=2,startX=(W-cols*(bw+gap))/2,startY=40;
+for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+const hp=(level>=3&&r<2)?2:1;
+bricks.push({x:startX+c*(bw+gap),y:startY+r*(bh+gap),w:bw,h:bh,hp,maxHp:hp,color:COLORS[r%COLORS.length],label:TOKENS[Math.floor(Math.random()*TOKENS.length)]})
+}}
+
+function addP(x,y,c,n){for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5,life:15+Math.random()*10,color:c,size:2+Math.random()*2})}
+
+function update(){
+if(state!=='playing')return;
+frame++;
+
+// Move pad
+if(keys['ArrowLeft']||keys['a'])padX-=6;
+if(keys['ArrowRight']||keys['d'])padX+=6;
+if(mouseX!==null)padX+=(mouseX-padX)*0.2;
+if(touchPadX!==null)padX+=(touchPadX-padX)*0.15;
+padX=Math.max(padW/2,Math.min(W-padW/2,padX));
+
+// Update balls
+for(let i=balls.length-1;i>=0;i--){
+const b=balls[i];
+b.x+=b.vx;b.y+=b.vy;
+
+// Walls
+if(b.x<5){b.x=5;b.vx=Math.abs(b.vx)}
+if(b.x>W-5){b.x=W-5;b.vx=-Math.abs(b.vx)}
+if(b.y<5){b.y=5;b.vy=Math.abs(b.vy)}
+
+// Paddle
+if(b.vy>0&&b.y>H-40&&b.y<H-30&&b.x>padX-padW/2-5&&b.x<padX+padW/2+5){
+b.vy=-Math.abs(b.vy);
+const off=(b.x-padX)/(padW/2);
+b.vx+=off*2;
+const spd=Math.sqrt(b.vx*b.vx+b.vy*b.vy);
+const maxSpd=6+level*0.5;
+if(spd>maxSpd){b.vx*=maxSpd/spd;b.vy*=maxSpd/spd}
+}
+
+// Bricks
+for(let j=bricks.length-1;j>=0;j--){
+const br=bricks[j];
+if(b.x>br.x&&b.x<br.x+br.w&&b.y>br.y&&b.y<br.y+br.h){
+br.hp--;
+if(br.hp<=0){
+score+=50;combo++;if(combo%5===0)score+=25;
+addP(br.x+br.w/2,br.y+br.h/2,br.color,8);
+// Power-up drop
+if(Math.random()<0.12){const pu=POWERUPS[Math.floor(Math.random()*POWERUPS.length)];powerUps.push({x:br.x+br.w/2,y:br.y,type:pu,vy:2})}
+bricks.splice(j,1);
+}else{addP(b.x,b.y,br.color,3)}
+b.vy*=-1;break;
+}}
+
+// Fall off
+if(b.y>H+10){balls.splice(i,1);combo=0}
+}
+
+// No balls left
+if(balls.length===0){
+lives--;
+if(lives<=0){state='gameover';window.parent.postMessage({type:'SCORE',score},'*')}
+else{balls=[{x:padX,y:H-50,vx:3*(Math.random()>0.5?1:-1),vy:-4-level*0.3}]}
+}
+
+// Power-ups
+for(let i=powerUps.length-1;i>=0;i--){
+const p=powerUps[i];p.y+=p.vy;
+if(p.y>H+20){powerUps.splice(i,1);continue}
+if(p.y>H-40&&p.y<H-25&&p.x>padX-padW/2&&p.x<padX+padW/2){
+if(p.type==='WIDE')padW=Math.min(160,padW+30);
+if(p.type==='MULTI'){const nb=[];for(const b of balls)nb.push({x:b.x,y:b.y,vx:b.vx+1,vy:b.vy},{x:b.x,y:b.y,vx:b.vx-1,vy:b.vy});balls.push(...nb)}
+if(p.type==='SLOW')for(const b of balls){b.vx*=0.7;b.vy*=0.7}
+addP(p.x,p.y,'#ffd700',6);powerUps.splice(i,1);
+}}
+
+// Level clear
+if(bricks.length===0&&state==='playing')state='levelComplete';
+
+// Particles
+for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;if(p.life<=0)particles.splice(i,1)}
+}
+
+function draw(){
+X.fillStyle='#09090b';X.fillRect(0,0,W,H);
+X.strokeStyle='rgba(0,255,65,0.03)';X.lineWidth=1;
+for(let i=0;i<W;i+=40){X.beginPath();X.moveTo(i,0);X.lineTo(i,H);X.stroke()}
+for(let i=0;i<H;i+=40){X.beginPath();X.moveTo(0,i);X.lineTo(W,i);X.stroke()}
+
+if(state==='menu'){
+X.textAlign='center';X.fillStyle='#00ff41';X.font='bold 32px monospace';X.fillText('TOKEN BREAKER',W/2,H/2-50);
+X.font='12px monospace';X.fillStyle='#a1a1aa';X.fillText('Break the tokens. Collect power-ups.',W/2,H/2-10);
+X.fillStyle='#00ff41';X.fillText('[← →] or Mouse to move paddle',W/2,H/2+20);
+X.fillText('[ENTER / TAP] to start',W/2,H/2+50);
+return}
+
+if(state==='paused'){
+X.fillStyle='rgba(0,0,0,0.7)';X.fillRect(0,0,W,H);
+X.fillStyle='#00ff41';X.font='bold 24px monospace';X.textAlign='center';X.fillText('PAUSED',W/2,H/2);return}
+
+// Bricks
+X.font='bold 7px monospace';X.textAlign='center';
+for(const br of bricks){
+const alpha=br.hp<br.maxHp?'80':'';
+X.fillStyle=br.color+(alpha||'25');X.fillRect(br.x,br.y,br.w,br.h);
+X.strokeStyle=br.color+'80';X.strokeRect(br.x,br.y,br.w,br.h);
+X.fillStyle=br.color;X.fillText(br.label,br.x+br.w/2,br.y+br.h/2+3);
+}
+
+// Power-ups
+for(const p of powerUps){
+const c=p.type==='WIDE'?'#00ff41':p.type==='MULTI'?'#3388ff':'#ffaa00';
+X.fillStyle=c+'40';X.fillRect(p.x-15,p.y-8,30,16);
+X.strokeStyle=c;X.strokeRect(p.x-15,p.y-8,30,16);
+X.fillStyle=c;X.font='bold 8px monospace';X.textAlign='center';X.fillText(p.type,p.x,p.y+3);
+}
+
+// Balls
+for(const b of balls){
+X.beginPath();X.arc(b.x,b.y,5,0,Math.PI*2);X.fillStyle='#00ff41';X.fill();
+X.shadowColor='#00ff41';X.shadowBlur=8;X.beginPath();X.arc(b.x,b.y,5,0,Math.PI*2);X.fill();X.shadowBlur=0;
+}
+
+// Paddle
+X.fillStyle='#00ff41';
+X.fillRect(padX-padW/2,H-35,padW,8);
+X.shadowColor='#00ff41';X.shadowBlur=6;X.fillStyle='#00ff4160';X.fillRect(padX-padW/2,H-35,padW,8);X.shadowBlur=0;
+
+// Particles
+for(const p of particles){X.globalAlpha=p.life/25;X.fillStyle=p.color;X.fillRect(p.x,p.y,p.size,p.size)}
+X.globalAlpha=1;
+
+// HUD
+X.textAlign='left';X.font='bold 12px monospace';X.fillStyle='#00ff41';
+X.fillText('SCORE: '+score,10,25);X.fillText('LEVEL: '+level,10,42);
+X.textAlign='right';X.fillStyle='#ff3333';X.fillText('♥'.repeat(lives),W-10,25);
+X.fillStyle='#71717a';X.font='10px monospace';X.fillText('COMBO: '+combo,W-10,42);
+
+if(state==='levelComplete'){
+X.fillStyle='rgba(0,0,0,0.7)';X.fillRect(0,0,W,H);
+X.textAlign='center';X.fillStyle='#00ff41';X.font='bold 24px monospace';X.fillText('LEVEL '+level+' CLEAR',W/2,H/2-20);
+X.font='12px monospace';X.fillStyle='#a1a1aa';X.fillText('[ENTER / TAP] for next level',W/2,H/2+20);
+}
+
+if(state==='gameover'){
+X.fillStyle='rgba(0,0,0,0.8)';X.fillRect(0,0,W,H);
+X.textAlign='center';X.fillStyle='#ff3333';X.font='bold 28px monospace';X.fillText('GAME OVER',W/2,H/2-40);
+X.fillStyle='#00ff41';X.font='bold 18px monospace';X.fillText('SCORE: '+score,W/2,H/2);
+X.font='12px monospace';X.fillStyle='#a1a1aa';X.fillText('Level: '+level,W/2,H/2+25);
+X.fillStyle='#00ff41';X.fillText('[ENTER / TAP] to restart',W/2,H/2+60);
+}}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

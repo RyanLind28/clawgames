@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#09090b;overflow:hidden;display:flex;align-items:center;justify-content:center;height:100vh;font-family:'JetBrains Mono',monospace;color:#e4e4e7}
+#game{max-width:600px;width:100%;padding:20px;text-align:center}
+.hud{display:flex;justify-content:space-between;margin-bottom:12px;font-size:11px;color:#71717a}
+.hud .score{color:#00ff41;font-weight:bold}
+.hud .time{color:#ffaa00}
+.grid{display:grid;gap:6px;margin:0 auto}
+.card{aspect-ratio:1.4;background:#111113;border:1px solid #222225;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;color:transparent;transition:all 0.2s;user-select:none;-webkit-user-select:none}
+.card.flipped,.card.matched{background:#09090b;border-color:#00ff41;color:#00ff41;text-shadow:0 0 6px rgba(0,255,65,0.4)}
+.card.matched{border-color:#00ff4160;color:#00ff4180}
+.card.wrong{border-color:#ff3333;color:#ff3333;animation:shake 0.3s}
+.card:hover:not(.flipped):not(.matched){border-color:#333338}
+@keyframes shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.overlay{position:fixed;inset:0;background:rgba(9,9,11,0.9);display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:10}
+.overlay h1{color:#00ff41;font-size:28px;margin-bottom:10px;text-shadow:0 0 10px rgba(0,255,65,0.4)}
+.overlay p{color:#a1a1aa;font-size:12px;margin:4px 0}
+.overlay .big{color:#00ff41;font-size:20px;font-weight:bold;margin:10px 0}
+.btn{margin-top:16px;padding:8px 24px;background:#00ff41;color:#09090b;border:none;font-family:inherit;font-size:12px;font-weight:bold;cursor:pointer;border-radius:4px}
+.btn:hover{background:#33ff66}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<script>
+const PAIRS=[['TRANSFORMER','ATTENTION'],['GRADIENT','DESCENT'],['NEURAL','NETWORK'],['BACK','PROPAGATION'],['LOSS','FUNCTION'],['BATCH','NORMALIZE'],['ENCODER','DECODER'],['EMBEDDING','VECTOR'],['SOFTMAX','PROBABILITY'],['DROPOUT','REGULARIZE'],['CONVOLUTION','FILTER'],['RECURRENT','SEQUENCE'],['TOKEN','EMBEDDING'],['LATENT','SPACE'],['FINE','TUNE']];
+
+const LEVELS=[
+{pairs:4,cols:4,rows:2,time:60},
+{pairs:6,cols:4,rows:3,time:75},
+{pairs:8,cols:4,rows:4,time:90},
+{pairs:10,cols:5,rows:4,time:100},
+{pairs:12,cols:6,rows:4,time:110},
+{pairs:15,cols:6,rows:5,time:120}
+];
+
+let level=0,cards=[],flipped=[],moves=0,matches=0,timeLeft=0,score=0,totalScore=0,combo=0,lockBoard=false,timer=null,state='menu';
+const el=document.getElementById('game');
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+function render(){
+if(state==='menu'){
+el.innerHTML='<div class="overlay"><h1>MEMORY MATRIX</h1><p>Match AI concept pairs across 6 levels</p><p style="color:#71717a;font-size:10px;margin-top:8px">TRANSFORMER + ATTENTION, GRADIENT + DESCENT...</p><button class="btn" onclick="startGame()">START</button></div>';return}
+
+if(state==='gameover'){
+el.innerHTML=`<div class="overlay"><h1 style="color:#ff3333">TIME UP</h1><p class="big">SCORE: ${totalScore}</p><p>Level ${level+1} — ${matches}/${LEVELS[level].pairs} pairs</p><button class="btn" onclick="startGame()">RETRY</button></div>`;
+window.parent.postMessage({type:'SCORE',score:totalScore},'*');return}
+
+if(state==='complete'){
+el.innerHTML=`<div class="overlay"><h1>COMPLETE!</h1><p class="big">FINAL SCORE: ${totalScore}</p><p>All 6 levels cleared in ${moves} moves</p><button class="btn" onclick="startGame()">PLAY AGAIN</button></div>`;
+window.parent.postMessage({type:'SCORE',score:totalScore},'*');return}
+
+if(state==='levelComplete'){
+el.innerHTML=`<div class="overlay"><h1>LEVEL ${level+1} CLEAR</h1><p class="big">+${score} points</p><p>Time bonus: +${Math.floor(timeLeft/10)*10}</p><button class="btn" onclick="nextLevel()">NEXT LEVEL</button></div>`;return}
+
+const cfg=LEVELS[level];
+let html=`<div class="hud"><span>LEVEL ${level+1}/6</span><span class="score">SCORE: ${totalScore}</span><span class="time">TIME: ${timeLeft}s</span><span>MOVES: ${moves}</span></div>`;
+html+=`<div class="grid" style="grid-template-columns:repeat(${cfg.cols},1fr);max-width:${cfg.cols*80}px">`;
+for(let i=0;i<cards.length;i++){
+const c=cards[i];
+const cls=c.matched?'card matched':c.flipped?'card flipped':c.wrong?'card wrong':'card';
+html+=`<div class="${cls}" onclick="flipCard(${i})">${c.flipped||c.matched?c.text:'?'}</div>`;
+}
+html+='</div>';el.innerHTML=html;
+}
+
+function startGame(){level=0;totalScore=0;moves=0;state='playing';initLevel()}
+
+function initLevel(){
+const cfg=LEVELS[level];
+const selected=shuffle([...PAIRS]).slice(0,cfg.pairs);
+const flat=[];
+for(const[a,b]of selected){flat.push({text:a,pairId:a+b,flipped:false,matched:false,wrong:false});flat.push({text:b,pairId:a+b,flipped:false,matched:false,wrong:false})}
+cards=shuffle(flat);flipped=[];matches=0;score=0;combo=0;timeLeft=cfg.time;lockBoard=true;
+
+// Peek phase
+for(const c of cards)c.flipped=true;
+render();
+setTimeout(()=>{for(const c of cards)c.flipped=false;lockBoard=false;render();startTimer()},1500);
+}
+
+function startTimer(){
+clearInterval(timer);
+timer=setInterval(()=>{
+timeLeft--;
+if(timeLeft<=0){clearInterval(timer);state='gameover';render()}
+else{render()}
+},1000);
+}
+
+function flipCard(i){
+if(lockBoard||cards[i].flipped||cards[i].matched)return;
+cards[i].flipped=true;flipped.push(i);moves++;
+
+if(flipped.length===2){
+lockBoard=true;
+const[a,b]=flipped;
+if(cards[a].pairId===cards[b].pairId){
+cards[a].matched=true;cards[b].matched=true;
+matches++;combo++;score+=200;if(combo%3===0)score+=50;
+score+=Math.floor(timeLeft/10)*10;
+flipped=[];lockBoard=false;render();
+
+if(matches===LEVELS[level].pairs){
+clearInterval(timer);totalScore+=score;
+if(level>=5){state='complete'}else{state='levelComplete'}
+render();
+}
+}else{
+cards[a].wrong=true;cards[b].wrong=true;combo=0;render();
+setTimeout(()=>{cards[a].flipped=false;cards[b].flipped=false;cards[a].wrong=false;cards[b].wrong=false;flipped=[];lockBoard=false;render()},700);
+}
+}else{render()}
+}
+
+function nextLevel(){level++;state='playing';initLevel()}
+
+render();
+</script>
+</body>
+</html>

@@ -17,13 +17,6 @@ const BLOCKED_PATTERNS = [
   /window\.open/gi,
   /window\.location/gi,
   /document\.domain/gi,
-  /\.postMessage\s*\([^)]*(?!parent)/gi, // only allow parent.postMessage
-];
-
-// Patterns that ARE allowed
-const ALLOWED_PATTERNS = [
-  /window\.parent\.postMessage/gi,
-  /parent\.postMessage/gi,
 ];
 
 const MAX_SIZE = 512 * 1024; // 512KB
@@ -45,18 +38,8 @@ export function sanitizeGameHtml(html: string): SanitizeResult {
   // Check for blocked patterns
   for (const pattern of BLOCKED_PATTERNS) {
     pattern.lastIndex = 0;
-    const matches = html.match(pattern);
-    if (matches) {
-      // Filter out allowed patterns
-      const actualBlocked = matches.filter(m => {
-        return !ALLOWED_PATTERNS.some(ap => {
-          ap.lastIndex = 0;
-          return ap.test(m);
-        });
-      });
-      if (actualBlocked.length > 0) {
-        errors.push(`Blocked pattern found: ${actualBlocked[0]}`);
-      }
+    if (pattern.test(html)) {
+      errors.push(`Blocked pattern found: ${pattern.source}`);
     }
   }
 

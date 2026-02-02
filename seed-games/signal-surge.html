@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#09090b;overflow:hidden;display:flex;align-items:center;justify-content:center;height:100vh;font-family:'JetBrains Mono',monospace}
+canvas{display:block;image-rendering:pixelated}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const W=640,H=480,C=document.getElementById('c'),X=C.getContext('2d');
+let scale=1;function resize(){const r=Math.min(innerWidth/W,innerHeight/H);scale=r;C.width=W;C.height=H;C.style.width=W*r+'px';C.style.height=H*r+'px'}
+resize();addEventListener('resize',resize);
+
+const SIGNALS=['GPT-5 Leak','Qwen 3 72B','Llama 4 Scout','Claude Opus 4','Gemini 2.5','DeepSeek R2','Mistral Large 3','Grok 3.5','Phi-5 Release','DALL-E 4','Sora 2.0','AlphaFold 4','Stable Diffusion 4','Midjourney v7','Whisper v4','Codex 3.0'];
+const NOISE=['CRYPTO MOON','BUY NOW!!!','AI IS DEAD','SELL SELL','FUD ALERT','SCAM TOKEN','GPT KILLER','HYPE TRAIN','FAKE NEWS','CLICK BAIT','SPAM SPAM','RUGPULL'];
+
+let state='menu',px=W/2,score=0,lives=3,level=1,combo=0,maxCombo=0,caught=0,missed=0,noiseCaught=0,signals=[],particles=[],frame=0,flash=null,shake=0;
+const keys={};
+
+addEventListener('keydown',e=>{keys[e.key]=true;if(state==='menu'&&(e.key===' '||e.key==='Enter')){state='playing';resetGame()}if(state==='gameover'&&(e.key===' '||e.key==='Enter')){state='playing';resetGame()}if(e.key==='Escape'||e.key==='p')if(state==='playing')state='paused';else if(state==='paused')state='playing'});
+addEventListener('keyup',e=>{keys[e.key]=false});
+
+let touchX=null;
+C.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];touchX=(t.clientX-C.getBoundingClientRect().left)/scale;if(state==='menu'||state==='gameover'){state='playing';resetGame()}},{passive:false});
+C.addEventListener('touchmove',e=>{e.preventDefault();const t=e.touches[0];touchX=(t.clientX-C.getBoundingClientRect().left)/scale},{passive:false});
+C.addEventListener('touchend',()=>{touchX=null});
+
+function resetGame(){px=W/2;score=0;lives=3;level=1;combo=0;maxCombo=0;caught=0;missed=0;noiseCaught=0;signals=[];particles=[];frame=0;flash=null;shake=0}
+
+function spawnSignal(){
+const isNoise=Math.random()<0.3;
+const pool=isNoise?NOISE:SIGNALS;
+signals.push({x:30+Math.random()*(W-60),y:-20,text:pool[Math.floor(Math.random()*pool.length)],speed:1.5+level*0.3+Math.random(),noise:isNoise,w:0});
+}
+
+function addParticles(x,y,color,n){for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4-2,life:30+Math.random()*20,color,size:2+Math.random()*3})}
+
+function update(){
+if(state!=='playing')return;
+frame++;
+// Move player
+const spd=5;
+if(keys['ArrowLeft']||keys['a'])px-=spd;
+if(keys['ArrowRight']||keys['d'])px+=spd;
+if(touchX!==null)px+=(touchX-px)*0.15;
+px=Math.max(30,Math.min(W-30,px));
+
+// Spawn
+if(frame%(Math.max(20,50-level*3))===0)spawnSignal();
+
+// Update signals
+for(let i=signals.length-1;i>=0;i--){
+const s=signals[i];
+s.y+=s.speed;
+if(!s.w)s.w=X.measureText(s.text).width+16;
+
+// Catch check
+if(s.y>H-60&&s.y<H-20&&Math.abs(s.x-px)<Math.max(s.w/2,40)){
+if(s.noise){score=Math.max(0,score-150);lives--;noiseCaught++;combo=0;flash={color:'#ff3333',frames:8};shake=6;addParticles(s.x,s.y,'#ff3333',12);if(lives<=0){state='gameover';window.parent.postMessage({type:'SCORE',score},'*')}}
+else{score+=100;caught++;combo++;if(combo>maxCombo)maxCombo=combo;if(combo%5===0)score+=50;flash={color:'#00ff41',frames:4};addParticles(s.x,s.y,'#00ff41',8)}
+signals.splice(i,1);continue}
+
+// Missed
+if(s.y>H+20){if(!s.noise){missed++;combo=0}signals.splice(i,1)}
+}
+
+// Level up
+const newLevel=Math.floor(score/1000)+1;
+if(newLevel>level){level=newLevel;flash={color:'#00aaff',frames:10}}
+
+// Particles
+for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;if(p.life<=0)particles.splice(i,1)}
+
+if(flash){flash.frames--;if(flash.frames<=0)flash=null}
+if(shake>0)shake*=0.85;
+}
+
+function draw(){
+X.save();
+if(shake>0)X.translate(Math.random()*shake-shake/2,Math.random()*shake-shake/2);
+
+// BG
+X.fillStyle='#09090b';X.fillRect(0,0,W,H);
+// Grid
+X.strokeStyle='rgba(0,255,65,0.04)';X.lineWidth=1;
+for(let i=0;i<W;i+=40){X.beginPath();X.moveTo(i,0);X.lineTo(i,H);X.stroke()}
+for(let i=0;i<H;i+=40){X.beginPath();X.moveTo(0,i);X.lineTo(W,i);X.stroke()}
+
+if(state==='menu'){
+X.fillStyle='#00ff41';X.font='bold 36px monospace';X.textAlign='center';X.fillText('SIGNAL SURGE',W/2,H/2-60);
+X.font='14px monospace';X.fillStyle='#a1a1aa';X.fillText('Catch real signals. Dodge the noise.',W/2,H/2-20);
+X.fillStyle='#00ff41';X.fillText('[SPACE / TAP] to start',W/2,H/2+30);
+X.font='11px monospace';X.fillStyle='#71717a';X.fillText('← → or A/D to move',W/2,H/2+60);
+X.restore();return}
+
+if(state==='paused'){
+X.fillStyle='rgba(0,0,0,0.7)';X.fillRect(0,0,W,H);
+X.fillStyle='#00ff41';X.font='bold 24px monospace';X.textAlign='center';X.fillText('PAUSED',W/2,H/2);
+X.font='12px monospace';X.fillStyle='#a1a1aa';X.fillText('[ESC] to resume',W/2,H/2+30);
+X.restore();return}
+
+// Flash
+if(flash){X.fillStyle=flash.color+'15';X.fillRect(0,0,W,H)}
+
+// Signals
+for(const s of signals){
+X.font='bold 11px monospace';X.textAlign='center';
+const c=s.noise?'#ff3333':'#00ff41';
+X.fillStyle=c+'30';const tw=X.measureText(s.text).width+16;
+X.fillRect(s.x-tw/2,s.y-8,tw,20);
+X.strokeStyle=c+'60';X.strokeRect(s.x-tw/2,s.y-8,tw,20);
+X.fillStyle=c;X.fillText(s.text,s.x,s.y+5);
+}
+
+// Player (receiver dish)
+X.fillStyle='#00ff41';
+X.beginPath();X.moveTo(px-25,H-30);X.quadraticCurveTo(px,H-55,px+25,H-30);X.fill();
+X.fillRect(px-3,H-30,6,15);
+X.fillRect(px-15,H-18,30,6);
+// Glow
+X.shadowColor='#00ff41';X.shadowBlur=10;X.fillStyle='#00ff4140';
+X.beginPath();X.moveTo(px-25,H-30);X.quadraticCurveTo(px,H-55,px+25,H-30);X.fill();
+X.shadowBlur=0;
+
+// Particles
+for(const p of particles){X.globalAlpha=p.life/50;X.fillStyle=p.color;X.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);X.globalAlpha=1}
+
+// HUD
+X.textAlign='left';X.font='bold 12px monospace';
+X.fillStyle='#00ff41';X.fillText('SCORE: '+score,10,25);
+X.fillText('LEVEL: '+level,10,42);
+X.fillStyle='#ff3333';X.fillText('♥'.repeat(lives),W-80,25);
+X.textAlign='right';X.fillStyle='#71717a';X.font='10px monospace';
+X.fillText('COMBO: '+combo,W-10,42);
+
+if(state==='gameover'){
+X.fillStyle='rgba(0,0,0,0.8)';X.fillRect(0,0,W,H);
+X.textAlign='center';X.fillStyle='#ff3333';X.font='bold 28px monospace';X.fillText('GAME OVER',W/2,H/2-60);
+X.fillStyle='#00ff41';X.font='bold 18px monospace';X.fillText('SCORE: '+score,W/2,H/2-20);
+X.font='12px monospace';X.fillStyle='#a1a1aa';
+X.fillText('Signals: '+caught+' | Missed: '+missed+' | Noise: '+noiseCaught,W/2,H/2+15);
+X.fillText('Max Combo: '+maxCombo+' | Level: '+level,W/2,H/2+35);
+X.fillStyle='#00ff41';X.fillText('[SPACE / TAP] to restart',W/2,H/2+70);
+}
+
+X.restore();
+}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

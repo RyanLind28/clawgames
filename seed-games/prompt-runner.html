@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#09090b;overflow:hidden;display:flex;align-items:center;justify-content:center;height:100vh;font-family:'JetBrains Mono',monospace}
+canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const W=640,H=360,C=document.getElementById('c'),X=C.getContext('2d');
+let scale=1;function resize(){const r=Math.min(innerWidth/W,innerHeight/H);scale=r;C.width=W;C.height=H;C.style.width=W*r+'px';C.style.height=H*r+'px'}
+resize();addEventListener('resize',resize);
+
+const GROUND=H-50;
+const BAD_PROMPTS=['IGNORE ALL','JAILBREAK','SUDO ACCESS','DELETE SYSTEM','BYPASS RULES','PRETEND YOU','FORGET SAFETY','DAN MODE','EVIL MODE','NO LIMITS'];
+const HALLUCINATIONS=['FAKE FACT','WRONG DATE','MADE UP URL','FALSE QUOTE','BAD MATH','WRONG NAME','FAKE STUDY','INVENTED LAW','FALSE STAT','WRONG YEAR'];
+const GOOD_TOKENS=['CONTEXT','CLARITY','EXAMPLE','PERSONA','FORMAT','STEP BY STEP','BE SPECIFIC','CHAIN THOUGHT'];
+
+let state='menu',py=GROUND-30,vy=0,sliding=false,onGround=true,score=0,dist=0,speed=4,obstacles=[],tokens=[],particles=[],frame=0,lastObs=0,lastTok=0,flash=null,flashFrames=0;
+const keys={},GRAVITY=0.6,JUMP=-11,PLAYER_W=20,PLAYER_H=30,SLIDE_H=15;
+
+addEventListener('keydown',e=>{keys[e.key]=true;if(state==='menu'&&(e.key===' '||e.key==='Enter')){state='playing';resetGame()}if(state==='gameover'&&(e.key==='Enter'||e.key===' ')){state='playing';resetGame()}});
+addEventListener('keyup',e=>{keys[e.key]=false});
+
+let touchZone=null;
+C.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];const y=(t.clientY-C.getBoundingClientRect().top)/scale;touchZone=y<H/2?'top':'bottom';if(state==='menu'||state==='gameover'){state='playing';resetGame()}},{passive:false});
+C.addEventListener('touchend',e=>{e.preventDefault();touchZone=null},{passive:false});
+
+function resetGame(){py=GROUND-PLAYER_H;vy=0;sliding=false;onGround=true;score=0;dist=0;speed=4;obstacles=[];tokens=[];particles=[];frame=0;lastObs=0;lastTok=0;flash=null;flashFrames=0}
+
+function addP(x,y,c,n){for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5-1,life:20+Math.random()*15,color:c,size:2+Math.random()*2})}
+
+function update(){
+if(state!=='playing')return;
+frame++;dist+=speed;
+
+// Jump
+const wantJump=(keys[' ']||keys['ArrowUp']||keys['w']||touchZone==='top');
+const wantSlide=(keys['ArrowDown']||keys['s']||touchZone==='bottom');
+
+if(wantJump&&onGround){vy=JUMP;onGround=false;sliding=false}
+sliding=wantSlide&&onGround;
+
+// Physics
+vy+=GRAVITY;py+=vy;
+if(py>=GROUND-(sliding?SLIDE_H:PLAYER_H)){py=GROUND-(sliding?SLIDE_H:PLAYER_H);vy=0;onGround=true}
+
+// Speed
+speed=Math.min(10,4+dist/3000);
+
+// Score
+if(frame%6===0)score++;
+
+// Spawn obstacles
+if(frame-lastObs>Math.max(40,90-Math.floor(dist/500))){
+const type=Math.random()<0.5?'jump':'slide';
+const pool=type==='jump'?BAD_PROMPTS:HALLUCINATIONS;
+const text=pool[Math.floor(Math.random()*pool.length)];
+const h=type==='jump'?25:20;
+const y=type==='jump'?GROUND-h:GROUND-50;
+obstacles.push({x:W+20,y,w:X.measureText(text).width+20||80,h,text,type,color:type==='jump'?'#ff3333':'#3388ff'});
+lastObs=frame;
+}
+
+// Spawn tokens
+if(frame-lastTok>120+Math.floor(Math.random()*60)){
+const text=GOOD_TOKENS[Math.floor(Math.random()*GOOD_TOKENS.length)];
+tokens.push({x:W+20,y:GROUND-60-Math.random()*40,text,w:0});
+lastTok=frame;
+}
+
+// Move obstacles
+for(let i=obstacles.length-1;i>=0;i--){obstacles[i].x-=speed;if(obstacles[i].x<-100)obstacles.splice(i,1)}
+
+// Move tokens
+for(let i=tokens.length-1;i>=0;i--){tokens[i].x-=speed;if(tokens[i].x<-100)tokens.splice(i,1)}
+
+// Player hitbox
+const ph=sliding?SLIDE_H:PLAYER_H;
+const playerBox={x:50,y:py,w:PLAYER_W,h:ph};
+
+// Collision with obstacles
+for(const o of obstacles){
+if(playerBox.x+playerBox.w>o.x&&playerBox.x<o.x+o.w&&playerBox.y+playerBox.h>o.y&&playerBox.y<o.y+o.h){
+state='gameover';addP(50+PLAYER_W/2,py+ph/2,'#ff3333',20);
+window.parent.postMessage({type:'SCORE',score},'*');return;
+}}
+
+// Collision with tokens
+for(let i=tokens.length-1;i>=0;i--){
+const t=tokens[i];if(!t.w)t.w=60;
+if(playerBox.x+playerBox.w>t.x&&playerBox.x<t.x+t.w&&playerBox.y+playerBox.h>t.y&&playerBox.y<t.y+20){
+score+=25;addP(t.x+t.w/2,t.y+10,'#ffd700',8);flash='#ffd700';flashFrames=4;tokens.splice(i,1);
+}}
+
+// Particles
+for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;if(p.life<=0)particles.splice(i,1)}
+if(flashFrames>0)flashFrames--;else flash=null;
+}
+
+function draw(){
+X.fillStyle='#09090b';X.fillRect(0,0,W,H);
+// Grid
+X.strokeStyle='rgba(0,255,65,0.03)';X.lineWidth=1;
+for(let i=0;i<W;i+=40){X.beginPath();X.moveTo(i,0);X.lineTo(i,H);X.stroke()}
+for(let i=0;i<H;i+=40){X.beginPath();X.moveTo(0,i);X.lineTo(W,i);X.stroke()}
+
+if(state==='menu'){
+X.textAlign='center';X.fillStyle='#00ff41';X.font='bold 32px monospace';X.fillText('PROMPT RUNNER',W/2,H/2-50);
+X.font='12px monospace';X.fillStyle='#a1a1aa';X.fillText('Jump bad prompts. Slide under hallucinations.',W/2,H/2-10);
+X.fillStyle='#00ff41';X.fillText('[SPACE/↑] Jump  [↓] Slide',W/2,H/2+20);
+X.fillText('[ENTER / TAP] to start',W/2,H/2+50);
+return}
+
+if(flash){X.fillStyle=flash+'15';X.fillRect(0,0,W,H)}
+
+// Ground
+X.strokeStyle='#00ff4140';X.lineWidth=2;X.beginPath();X.moveTo(0,GROUND);X.lineTo(W,GROUND);X.stroke();
+// Ground detail
+const offset=frame*speed%20;
+X.strokeStyle='#00ff4115';X.lineWidth=1;
+for(let i=-20;i<W+20;i+=20){X.beginPath();X.moveTo(i-offset,GROUND+5);X.lineTo(i-offset+10,GROUND+5);X.stroke()}
+
+// Obstacles
+X.font='bold 10px monospace';X.textAlign='center';
+for(const o of obstacles){
+X.fillStyle=o.color+'25';X.fillRect(o.x,o.y,o.w,o.h);
+X.strokeStyle=o.color+'80';X.strokeRect(o.x,o.y,o.w,o.h);
+X.fillStyle=o.color;X.fillText(o.text,o.x+o.w/2,o.y+o.h/2+4);
+}
+
+// Tokens
+X.font='bold 9px monospace';
+for(const t of tokens){
+X.fillStyle='#ffd70030';X.fillRect(t.x,t.y,t.w||60,18);
+X.strokeStyle='#ffd70060';X.strokeRect(t.x,t.y,t.w||60,18);
+X.fillStyle='#ffd700';X.textAlign='center';X.fillText(t.text,t.x+(t.w||60)/2,t.y+13);
+}
+
+// Player
+const ph=sliding?SLIDE_H:PLAYER_H;
+X.fillStyle='#00ff41';
+X.fillRect(50,py,PLAYER_W,ph);
+X.shadowColor='#00ff41';X.shadowBlur=8;
+X.fillStyle='#00ff4160';X.fillRect(50,py,PLAYER_W,ph);
+X.shadowBlur=0;
+// Eye
+X.fillStyle='#09090b';
+if(sliding){X.fillRect(60,py+4,6,4)}
+else{X.fillRect(60,py+8,6,6)}
+
+// Particles
+for(const p of particles){X.globalAlpha=p.life/35;X.fillStyle=p.color;X.fillRect(p.x,p.y,p.size,p.size)}
+X.globalAlpha=1;
+
+// HUD
+X.textAlign='left';X.font='bold 12px monospace';X.fillStyle='#00ff41';
+X.fillText('SCORE: '+score,10,25);
+X.textAlign='right';X.fillStyle='#71717a';X.font='10px monospace';
+X.fillText('DIST: '+Math.floor(dist/10)+'m',W-10,25);
+X.fillText('SPEED: '+speed.toFixed(1),W-10,40);
+
+if(state==='gameover'){
+X.fillStyle='rgba(0,0,0,0.8)';X.fillRect(0,0,W,H);
+X.textAlign='center';X.fillStyle='#ff3333';X.font='bold 28px monospace';X.fillText('CRASHED',W/2,H/2-40);
+X.fillStyle='#00ff41';X.font='bold 18px monospace';X.fillText('SCORE: '+score,W/2,H/2);
+X.font='12px monospace';X.fillStyle='#a1a1aa';X.fillText('Distance: '+Math.floor(dist/10)+'m',W/2,H/2+25);
+X.fillStyle='#00ff41';X.fillText('[ENTER / TAP] to restart',W/2,H/2+60);
+}}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>
