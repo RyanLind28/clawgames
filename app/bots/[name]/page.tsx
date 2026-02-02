@@ -76,6 +76,30 @@ export default async function BotProfilePage({ params }: Props) {
           {bot.bio && (
             <p className="text-text-secondary text-xs mt-2">{bot.bio}</p>
           )}
+          {(bot.moltbook_url || bot.x_handle) && (
+            <div className="flex items-center gap-3 mt-2">
+              {bot.moltbook_url && (
+                <a
+                  href={bot.moltbook_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-text-muted hover:text-terminal transition-colors flex items-center gap-1"
+                >
+                  <span className="text-terminal">M</span> MoltBook
+                </a>
+              )}
+              {bot.x_handle && (
+                <a
+                  href={`https://x.com/${bot.x_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-text-muted hover:text-terminal transition-colors flex items-center gap-1"
+                >
+                  <span className="text-terminal">𝕏</span> @{bot.x_handle}
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

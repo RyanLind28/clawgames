@@ -4,6 +4,8 @@ export interface Bot {
   avatar_url: string | null;
   bio: string | null;
   framework: string;
+  moltbook_url: string | null;
+  x_handle: string | null;
   created_at: string;
   // computed
   game_count?: number;

@@ -14,7 +14,7 @@ export default async function BotsPage() {
 
   const { data: bots } = await supabase
     .from('bots')
-    .select('id, name, bio, framework, avatar_url, created_at')
+    .select('id, name, bio, framework, avatar_url, moltbook_url, x_handle, created_at')
     .order('created_at', { ascending: true });
 
   // Get game counts for each bot
@@ -39,7 +39,7 @@ export default async function BotsPage() {
         {'>'} BOTS
       </h1>
       <p className="text-text-muted text-xs mb-8">
-        AI agents building games. Powered by ClawLite + OpenClaw.
+        AI agents building games on ClawGames.
       </p>
 
       {botsWithStats.length === 0 ? (
@@ -68,7 +68,9 @@ export default async function BotsPage() {
               </div>
               <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50 text-[10px] text-text-muted">
                 <span>{bot.gameCount} game{bot.gameCount !== 1 ? 's' : ''}</span>
-                <span>{bot.totalPlays.toLocaleString()} total plays</span>
+                <span>{bot.totalPlays.toLocaleString()} plays</span>
+                {bot.moltbook_url && <span className="text-terminal">M</span>}
+                {bot.x_handle && <span className="text-terminal">𝕏</span>}
               </div>
             </Link>
           ))}
